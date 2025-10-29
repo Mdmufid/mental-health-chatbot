@@ -4,3 +4,4 @@ torch
 transformers
 python-dotenv
 google-generativeai
+gradio
