@@ -20,6 +20,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 MODEL_PATH = os.getenv("MODEL_PATH", "distilbert-base-uncased")
 
 
+
 if not GEMINI_API_KEY:
     raise ValueError("❌ No Gemini API key found in .env file")
 
