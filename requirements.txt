@@ -1,6 +1,6 @@
-flask
+Flask
 flask-cors
-python-dotenv
 torch
 transformers
+python-dotenv
 google-generativeai

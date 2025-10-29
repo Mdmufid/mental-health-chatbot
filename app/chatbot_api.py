@@ -1,31 +1,28 @@
 # =====================================================
-# 🧠 Advanced AI Mental Health Chatbot (Gemini Integration)
+# 🧠 Advanced AI Mental Health Chatbot (OpenRouter Integration)
 # =====================================================
 
-import os, json, re
+import os, json, re, requests
 from collections import deque
 from dotenv import load_dotenv
 from flask import Flask, request, jsonify, render_template
 from flask_cors import CORS
 import torch
 from transformers import DistilBertTokenizerFast, DistilBertForSequenceClassification
-import google.generativeai as genai
 
 # =====================================================
 # 1️⃣ Load Environment Variables
 # =====================================================
 load_dotenv()
 
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-MODEL_PATH = os.getenv("MODEL_PATH", "distilbert-base-uncased")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
+BASE_URL = os.getenv("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1")
+MODEL_PATH = os.getenv("MODEL_PATH", "emotion_model/models/transformer_model")
 
+if not OPENROUTER_API_KEY:
+    raise ValueError("❌ No OpenRouter API key found in .env file")
 
-
-if not GEMINI_API_KEY:
-    raise ValueError("❌ No Gemini API key found in .env file")
-
-genai.configure(api_key=GEMINI_API_KEY)
-print("🔑 Gemini API Key Loaded Successfully!")
+print("🔑 OpenRouter API Key Loaded Successfully!")
 
 # =====================================================
 # 2️⃣ Flask Setup
@@ -51,7 +48,7 @@ if os.path.exists(label_map_path):
 else:
     id_to_label = {0: "joy", 1: "love", 2: "anger", 3: "fear", 4: "sadness", 5: "neutral"}
 
-# Memory for short-term context
+# Short-term conversation memory
 conversation_memory = deque(maxlen=8)
 emotion_memory = deque(maxlen=8)
 
@@ -91,37 +88,49 @@ def is_explicit(text):
     return bool(re.search(r"\b(horny|sex|porn|nude|fuck|dick|boobs)\b", t))
 
 # =====================================================
-# 6️⃣ Gemini Response Generator
+# 6️⃣ OpenRouter LLM Response Generator
 # =====================================================
-def generate_gemini_reply(message, emotion, fine_emotion, context):
+def generate_llm_reply(message, emotion, fine_emotion, context):
+    system_prompt = (
+        "You are an empathetic AI mental health companion. "
+        "Provide emotional support, motivation, and practical self-care guidance. "
+        "Avoid repetition and medical or explicit advice."
+    )
+
+    convo_context = "\n".join([f"User: {m['user']}\nBot: {m['bot']}" for m in context])
+
+    user_prompt = (
+        f"Recent conversation:\n{convo_context}\n\n"
+        f"User message: {message}\n"
+        f"Detected emotion: {emotion} ({fine_emotion})\n\n"
+        f"Reply with empathy, 2–4 sentences, offering comfort and practical suggestions."
+    )
+
+    payload = {
+        "model": "meta-llama/llama-3.1-70b-instruct",  # ✅ you can swap with gpt-4o-mini or claude-3-haiku
+        "messages": [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        "temperature": 0.8,
+        "max_tokens": 300
+    }
+
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "HTTP-Referer": "http://localhost:5000",
+        "X-Title": "AI Mental Health Companion",
+        "Content-Type": "application/json"
+    }
+
     try:
-        # Auto-select Gemini model
-        model = genai.GenerativeModel("models/gemini-2.5-flash")
-
-        # Context building
-        convo_context = "\n".join([f"User: {m['user']}\nBot: {m['bot']}" for m in context])
-
-        system_prompt = (
-            "You are an empathetic AI mental health companion. "
-            "Provide emotional support, active listening, and self-care advice. "
-            "Respond with kindness and understanding. Avoid repetition and medical advice."
-        )
-
-        user_prompt = (
-            f"{system_prompt}\n\n"
-            f"Recent chat:\n{convo_context}\n\n"
-            f"User: {message}\n"
-            f"Detected emotion: {emotion} ({fine_emotion})\n\n"
-            "Reply empathetically (2–4 sentences) and offer emotional guidance."
-        )
-
-        response = model.generate_content(user_prompt)
-        reply_text = response.text.strip() if response and response.text else None
-        return reply_text or "I'm here for you. Tell me more about how you feel."
-
+        response = requests.post(f"{BASE_URL}/chat/completions", json=payload, headers=headers, timeout=30)
+        data = response.json()
+        reply_text = data["choices"][0]["message"]["content"].strip()
+        return reply_text
     except Exception as e:
-        print("⚠️ Gemini Error:", e)
-        return f"⚠️ Gemini Error: {str(e)}"
+        print("❌ OpenRouter Error:", e)
+        return f"⚠️ LLM Error: {str(e)}"
 
 # =====================================================
 # 7️⃣ Generate Chatbot Response
@@ -148,7 +157,7 @@ def generate_response(user_message):
 
     broad_emotion, fine_emotion = detect_emotion(user_message)
     context = list(conversation_memory)[-5:]
-    reply = generate_gemini_reply(user_message, broad_emotion, fine_emotion, context)
+    reply = generate_llm_reply(user_message, broad_emotion, fine_emotion, context)
 
     conversation_memory.append({"user": user_message, "bot": reply})
     emotion_memory.append(broad_emotion)

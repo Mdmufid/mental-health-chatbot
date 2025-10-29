@@ -1,11 +1,9 @@
-# Ignore big model files and local stuff
-emotion_model/models/transformer_model/
+emotion_model/models/
 __pycache__/
-.venv/
-.env
 *.pt
-*.safetensors
 *.zip
 *.pkl
-*.ckpt
-*.csv
+*.safetensors
+.env
+venv/
+.venv/
