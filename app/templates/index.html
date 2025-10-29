@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <title>AI Mental Health Chatbot 💬</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+  <div class="chat-container">
+    <header class="chat-header">
+      <h2>🧠 AI Mental Health Companion</h2>
+    </header>
+
+    <main id="chat-box" class="chat-box">
+      <div class="bot-msg neutral">
+        👋 Hello! I'm your AI Mental Health Companion. How are you feeling today?
+      </div>
+    </main>
+
+    <footer class="input-area">
+      <input type="text" id="user-input" placeholder="Type your message..." autocomplete="off" />
+      <button id="send-btn">➤</button>
+    </footer>
+  </div>
+
+  <script>
+    const chatBox = document.getElementById("chat-box");
+    const userInput = document.getElementById("user-input");
+    const sendBtn = document.getElementById("send-btn");
+
+    async function sendMessage() {
+      const message = userInput.value.trim();
+      if (!message) return;
+      addMessage("user", message);
+      userInput.value = "";
+
+      try {
+        const res = await fetch("http://127.0.0.1:5000/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message }),
+        });
+
+        const data = await res.json();
+        if (data.reply) addMessage("bot", data.reply, data.emotion);
+        else addMessage("bot", "⚠️ Error: No reply from server.");
+      } catch (err) {
+        addMessage("bot", "⚠️ Connection error. Please check if the Flask server is running.");
+      }
+    }
+
+    function addMessage(sender, text, emotion = "neutral") {
+      const msg = document.createElement("div");
+      msg.className = sender === "user" ? "user-msg" : `bot-msg ${emotion}`;
+      msg.textContent = sender === "user" ? `You: ${text}` : text;
+      chatBox.appendChild(msg);
+      chatBox.scrollTo({ top: chatBox.scrollHeight, behavior: "smooth" });
+    }
+
+    sendBtn.addEventListener("click", sendMessage);
+    userInput.addEventListener("keypress", (e) => {
+      if (e.key === "Enter") sendMessage();
+    });
+  </script>
+</body>
+</html>
